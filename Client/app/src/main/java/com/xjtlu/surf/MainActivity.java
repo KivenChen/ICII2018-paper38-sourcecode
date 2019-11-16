@@ -37,6 +37,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
@@ -82,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
     
     String networkType = "Unknown";
     
-    final String IP = "172.20.10.3";
+    final String IP = "192.168.0.4";
     private static final int clientSendPort = 55800;
     private static final int clientRecvPort = 55801;
     
@@ -476,11 +477,11 @@ public class MainActivity extends AppCompatActivity {
 
             long[] item = awaitRecvBackList.poll();
             if (item == null){
-                throw new PackageLossException();
+                throw new PackageLossException("null await list");
             }
             long itemIndex = item[awaitIndex];
             if (itemIndex < recvIndex){
-                throw new PackageLossException();
+                throw new PackageLossException("Item await");
             }
 
             return recvTime - processDur - sentTimestamp;
@@ -492,6 +493,14 @@ public class MainActivity extends AppCompatActivity {
             String[] splited = recvData.replace("; ", ": ").replace("\n", "").split(": ");
             processDur = Integer.parseInt(splited[3]);
             return processDur;
+        }
+
+        private long getRecvIndex(String recvData){
+            long recvIndex = -1;
+            // todo: get sent timestamp and index from recvData
+            String[] splited = recvData.replace("; ", ": ").replace("\n", "").split(": ");
+            recvIndex = Long.parseLong(splited[1]);
+            return recvIndex;
         }
 
         @Override
@@ -522,14 +531,24 @@ public class MainActivity extends AppCompatActivity {
                     durationMillis = calcDurationMillis(recvData, receivedTimestamp);
                     String message = "Time: " + tFormat.format(System.currentTimeMillis()) + "; CSQ: " + Integer.toString(dbm)
                             + "; Height: " + dFormat.format(height) + "; Lati: " + lFormat.format(latitude) + "; Long: "
-                            + lFormat.format(longitude) + "; Index: " + Integer.toString(sendNum)
+                            + lFormat.format(longitude) + "; Index: " + getRecvIndex(recvData)
                             + ", Network: "+ networkType + ", ProcessDur: " + getServerProcessDuration(recvData) + ", durationTwoWay: " + durationMillis +  "\r\n";
 
                     fileWrite(MyFileName, message);
                     Logger.getGlobal().log(Level.INFO, message);
 
                 } catch (IOException e) {
-                    e.printStackTrace();
+//                    e.printStackTrace();
+                    if (e instanceof SocketException){
+                        try {
+                            _directIn = new InputStreamReader(recvSocket.getInputStream());
+                            bufferedIn = new BufferedReader(_directIn);
+
+                        } catch (IOException ioe) {
+                            e.printStackTrace();
+                            return;
+                        }
+                    }
                 }
                  catch (PackageLossException e) {
                     e.printStackTrace();
@@ -538,6 +557,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private class PackageLossException extends Exception {
+            public PackageLossException(String message) {
+                super(message);
+            }
         }
     }
 
